@@ -2251,6 +2251,9 @@ function printDoc(id) {
 
   window.print();
 }
+
+// Expor funcoes de Contas e Consignacao para os botoes (script type=module nao cria globais)
+Object.assign(window, { clearForm, deleteConsig, deleteConta, getContaStatus, marcarPaga, openConsigModal, openContaModal, printDoc, renderConsignacoes, renderContas, saveConsig, saveConsigStorage, saveConta, saveContasStorage, setField, updateConsigStatus, updateParcelasInfo, valorExtenso, viewConsig });
 </script>
 </body>
 </html>
