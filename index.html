@@ -760,6 +760,10 @@
         <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:6px;">RENAVAM</label>
         <input id="cs-renavam" type="text" placeholder="00000000000" style="width:100%;padding:10px;background:var(--dark3);border:1px solid var(--border);border-radius:8px;color:var(--text);">
       </div>
+      <div style="grid-column:1/-1;">
+        <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:6px;">CHASSI</label>
+        <input id="cs-chassi" type="text" maxlength="17" placeholder="9BWZZZ377VT004251" style="width:100%;padding:10px;background:var(--dark3);border:1px solid var(--border);border-radius:8px;color:var(--text);text-transform:uppercase;">
+      </div>
       <div>
         <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:6px;">COR</label>
         <input id="cs-cor" type="text" placeholder="Prata" style="width:100%;padding:10px;background:var(--dark3);border:1px solid var(--border);border-radius:8px;color:var(--text);">
@@ -776,8 +780,12 @@
         <input id="cs-valor-min" type="number" step="0.01" placeholder="0,00" style="width:100%;padding:10px;background:var(--dark3);border:1px solid var(--border);border-radius:8px;color:var(--text);">
       </div>
       <div>
-        <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:6px;">COMISSÃO DA LOJA (%)</label>
-        <input id="cs-comissao" type="number" step="0.1" placeholder="5" style="width:100%;padding:10px;background:var(--dark3);border:1px solid var(--border);border-radius:8px;color:var(--text);">
+        <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:6px;">COMISSÃO MÍNIMA DA LOJA (R$)</label>
+        <input id="cs-comissao" type="number" step="0.01" placeholder="0,00" style="width:100%;padding:10px;background:var(--dark3);border:1px solid var(--border);border-radius:8px;color:var(--text);">
+      </div>
+      <div style="grid-column:1/-1;">
+        <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:6px;">VALOR QUE O CONSIGNANTE QUER RECEBER (R$)</label>
+        <input id="cs-valor-consig" type="number" step="0.01" placeholder="Se deixar em branco: valor mínimo menos a comissão" style="width:100%;padding:10px;background:var(--dark3);border:1px solid var(--border);border-radius:8px;color:var(--text);">
       </div>
       <div>
         <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:6px;">DATA DE INÍCIO</label>
@@ -2039,11 +2047,16 @@ function getContaStatus(c, hoje){
 let consignacoes = JSON.parse(localStorage.getItem('tr_consig')||'[]');
 function saveConsigStorage(){ localStorage.setItem('tr_consig', JSON.stringify(consignacoes)); }
 
+function consigComissao(c){ return c.comissaoValor!=null ? Number(c.comissaoValor)||0 : (Number(c.valorMin)||0)*((Number(c.comissao)||0)/100); }
+function consigValorDono(c){ return c.valorConsignante!=null ? Number(c.valorConsignante)||0 : Math.max((Number(c.valorMin)||0)-consigComissao(c),0); }
+function consigBRL(n){ return 'R$ '+(Number(n)||0).toLocaleString('pt-BR',{minimumFractionDigits:2}); }
+
 function openConsigModal(){
   document.getElementById('modal-consig').style.display='block';
-  ['cs-nome','cs-cpf','cs-rg','cs-end','cs-tel','cs-email','cs-veiculo','cs-ano','cs-placa','cs-renavam','cs-cor','cs-km','cs-obs'].forEach(id=>document.getElementById(id).value='');
+  ['cs-nome','cs-cpf','cs-rg','cs-end','cs-tel','cs-email','cs-veiculo','cs-ano','cs-placa','cs-renavam','cs-chassi','cs-cor','cs-km','cs-obs'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('cs-valor-min').value='';
   document.getElementById('cs-comissao').value='';
+  document.getElementById('cs-valor-consig').value='';
   document.getElementById('cs-prazo').value=30;
   document.getElementById('cs-inicio').value=new Date().toISOString().split('T')[0];
 }
@@ -2052,15 +2065,20 @@ function saveConsig(){
   const nome = document.getElementById('cs-nome').value.trim();
   const veiculo = document.getElementById('cs-veiculo').value.trim();
   if(!nome||!veiculo){ alert('Informe o nome do proprietário e o veículo.'); return; }
+  const _vMin = parseFloat(document.getElementById('cs-valor-min').value)||0;
+  const _com = parseFloat(document.getElementById('cs-comissao').value)||0;
+  const _vcRaw = document.getElementById('cs-valor-consig').value;
+  const _vc = _vcRaw!=='' ? (parseFloat(_vcRaw)||0) : Math.max(_vMin-_com,0);
   const obj = {
     nome, cpf:document.getElementById('cs-cpf').value, rg:document.getElementById('cs-rg').value,
     end:document.getElementById('cs-end').value, tel:document.getElementById('cs-tel').value,
     email:document.getElementById('cs-email').value, veiculo,
     ano:document.getElementById('cs-ano').value, placa:document.getElementById('cs-placa').value,
-    renavam:document.getElementById('cs-renavam').value, cor:document.getElementById('cs-cor').value,
+    renavam:document.getElementById('cs-renavam').value, chassi:document.getElementById('cs-chassi').value.trim().toUpperCase(), cor:document.getElementById('cs-cor').value,
     km:document.getElementById('cs-km').value, obs:document.getElementById('cs-obs').value,
-    valorMin:parseFloat(document.getElementById('cs-valor-min').value)||0,
-    comissao:parseFloat(document.getElementById('cs-comissao').value)||5,
+    valorMin:_vMin,
+    comissaoValor:_com,
+    valorConsignante:_vc,
     inicio:document.getElementById('cs-inicio').value,
     prazo:parseInt(document.getElementById('cs-prazo').value)||30,
     status:'ativo', criado:new Date().toISOString()
@@ -2114,7 +2132,8 @@ function renderConsignacoes(){
         <div>📅 Início: <strong>${ini}</strong></div>
         <div>⏳ Vence prazo: <strong>${vencStr}</strong></div>
         <div>📆 ${diasAtivo} dias em consignação</div>
-        <div>💼 Comissão: <strong>${c.comissao}%</strong></div>
+        <div>💼 Comissão mín.: <strong>${consigBRL(consigComissao(c))}</strong></div>
+        <div>👤 Consignante recebe: <strong>${consigBRL(consigValorDono(c))}</strong></div>
       </div>
       <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;">
         <button class="btn btn-gold btn-sm" onclick="viewConsig(${realIdx})">📄 Ver Contrato</button>
@@ -2132,13 +2151,15 @@ function viewConsig(i){
   const vencPrazo = new Date(ini.getTime()+c.prazo*86400000);
   const fmtDate = d => d.toLocaleDateString('pt-BR');
   const valorExtensoConsig = c.valorMin ? `(${valorExtenso(c.valorMin)})` : '';
-  const comissaoValor = c.valorMin * (c.comissao/100);
+  const comissaoValor = consigComissao(c);
+  const valorDono = consigValorDono(c);
+  const logoSrc = (document.querySelector('header .logo img')||{}).src || '';
 
   document.getElementById('print-area-consig').innerHTML = `
   <div style="text-align:center;margin-bottom:24px;">
-    <div style="font-size:20px;font-weight:bold;letter-spacing:2px;">TR MOTORS</div>
-    <div style="font-size:12px;color:#555;">Comércio de Veículos — Panambi/RS</div>
-    <div style="font-size:16px;font-weight:bold;margin-top:16px;text-decoration:underline;">CONTRATO DE CONSIGNAÇÃO DE VEÍCULO</div>
+    ${logoSrc ? `<img src="${logoSrc}" style="display:block;margin:0 auto 20px;width:420px;max-width:90%;height:auto;">` : `<div style="font-size:20px;font-weight:bold;letter-spacing:2px;">TR MOTORS</div>`}
+    <div style="font-size:16px;font-weight:bold;text-decoration:underline;">CONTRATO DE CONSIGNAÇÃO DE VEÍCULO</div>
+    <div style="font-size:12px;color:#555;margin-top:6px;">TR Motors Comércio de Veículos – CNPJ 59.748.760/0001-24 – Panambi/RS</div>
   </div>
 
   <p style="margin-bottom:12px;">Pelo presente instrumento particular, de um lado:</p>
@@ -2156,12 +2177,16 @@ function viewConsig(i){
     <tr><td style="border:1px solid #ccc;padding:6px 10px;background:#f5f5f5;font-weight:bold;">Marca/Modelo</td><td style="border:1px solid #ccc;padding:6px 10px;">${c.veiculo}</td><td style="border:1px solid #ccc;padding:6px 10px;background:#f5f5f5;font-weight:bold;">Ano Fab./Mod.</td><td style="border:1px solid #ccc;padding:6px 10px;">${c.ano||'-'}</td></tr>
     <tr><td style="border:1px solid #ccc;padding:6px 10px;background:#f5f5f5;font-weight:bold;">Placa</td><td style="border:1px solid #ccc;padding:6px 10px;">${c.placa||'-'}</td><td style="border:1px solid #ccc;padding:6px 10px;background:#f5f5f5;font-weight:bold;">RENAVAM</td><td style="border:1px solid #ccc;padding:6px 10px;">${c.renavam||'-'}</td></tr>
     <tr><td style="border:1px solid #ccc;padding:6px 10px;background:#f5f5f5;font-weight:bold;">Cor</td><td style="border:1px solid #ccc;padding:6px 10px;">${c.cor||'-'}</td><td style="border:1px solid #ccc;padding:6px 10px;background:#f5f5f5;font-weight:bold;">Quilometragem</td><td style="border:1px solid #ccc;padding:6px 10px;">${c.km||'-'} km</td></tr>
+    <tr><td style="border:1px solid #ccc;padding:6px 10px;background:#f5f5f5;font-weight:bold;">Chassi</td><td style="border:1px solid #ccc;padding:6px 10px;" colspan="3">${c.chassi||'-'}</td></tr>
   </table>
 
   ${c.obs?`<p style="margin-bottom:16px;font-size:12px;"><strong>Estado/Observações:</strong> ${c.obs}</p>`:''}
 
   <p style="font-weight:bold;margin-bottom:8px;text-decoration:underline;">CLÁUSULA 2ª — DO VALOR E DA COMISSÃO</p>
-  <p style="margin-bottom:16px;">O valor mínimo acordado para a venda do veículo é de <strong>R$ ${c.valorMin.toLocaleString('pt-BR',{minimumFractionDigits:2})} ${valorExtensoConsig}</strong>. Sobre o valor da venda, a LOJA fará jus a uma comissão de <strong>${c.comissao}%</strong> (${c.comissao === 5 ? 'cinco' : c.comissao} por cento), correspondente a <strong>R$ ${comissaoValor.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong> calculado sobre o valor mínimo. Caso o veículo seja vendido por valor superior ao mínimo acordado, o excedente pertencerá à LOJA, salvo acordo diferente entre as partes.</p>
+  <p style="margin-bottom:8px;">O valor mínimo acordado para a venda do veículo é de <strong>${consigBRL(c.valorMin)} ${valorExtensoConsig}</strong>.</p>
+  <p style="margin-bottom:8px;">Pela intermediação da venda, a LOJA fará jus a uma comissão mínima no valor fixo de <strong>${consigBRL(comissaoValor)} (${valorExtenso(comissaoValor)})</strong>.</p>
+  <p style="margin-bottom:8px;">O valor líquido que o PROPRIETÁRIO deseja receber pela venda do veículo é de <strong>${consigBRL(valorDono)} (${valorExtenso(valorDono)})</strong>.</p>
+  <p style="margin-bottom:16px;">Caso o veículo seja vendido por valor superior ao mínimo acordado, o excedente pertencerá à LOJA, salvo acordo diferente entre as partes.</p>
 
   <p style="font-weight:bold;margin-bottom:8px;text-decoration:underline;">CLÁUSULA 3ª — DO PRAZO</p>
   <p style="margin-bottom:16px;">O presente contrato terá vigência mínima de <strong>${c.prazo} (${c.prazo === 30 ? 'trinta' : c.prazo}) dias</strong>, com início em <strong>${fmtDate(ini)}</strong> e término em <strong>${fmtDate(vencPrazo)}</strong>, podendo ser prorrogado por mútuo acordo entre as partes.</p>
@@ -2195,7 +2220,10 @@ function viewConsig(i){
   <p style="font-weight:bold;margin-bottom:8px;text-decoration:underline;">CLÁUSULA 8ª — DO PAGAMENTO AO PROPRIETÁRIO</p>
   <p style="margin-bottom:16px;">Após a concretização da venda, a LOJA efetuará o pagamento ao PROPRIETÁRIO no prazo máximo de <strong>5 (cinco) dias úteis</strong> após a liquidação do negócio, descontada a comissão prevista na Cláusula 2ª.</p>
 
-  <p style="font-weight:bold;margin-bottom:8px;text-decoration:underline;">CLÁUSULA 9ª — DO FORO</p>
+  <p style="font-weight:bold;margin-bottom:8px;text-decoration:underline;">CLÁUSULA 9ª — DO RECEBIMENTO DE VEÍCULO NA TROCA</p>
+  <p style="margin-bottom:16px;">Havendo proposta de compra em que o comprador ofereça outro veículo como parte do pagamento, a LOJA comunicará o PROPRIETÁRIO, que é livre para aceitar ou recusar o recebimento do veículo na troca. Aceitando, as partes ajustarão por escrito, no momento da negociação, o valor pelo qual o veículo será recebido e o valor que caberá à LOJA nessa operação, que prevalecerão sobre os valores da Cláusula 2ª. O veículo recebido na troca passará a pertencer ao PROPRIETÁRIO, que poderá retirá-lo ou mantê-lo na LOJA para venda, mediante novo contrato de consignação. Recusando, a venda somente será concluída se as partes chegarem a outro acordo, sem qualquer ônus ou penalidade ao PROPRIETÁRIO.</p>
+
+  <p style="font-weight:bold;margin-bottom:8px;text-decoration:underline;">CLÁUSULA 10ª — DO FORO</p>
   <p style="margin-bottom:24px;">As partes elegem o foro da Comarca de Panambi/RS para dirimir quaisquer dúvidas ou litígios decorrentes deste contrato, com renúncia a qualquer outro, por mais privilegiado que seja.</p>
 
   <p style="margin-bottom:32px;">E por estarem assim justas e contratadas, as partes assinam o presente instrumento em 2 (duas) vias de igual teor, na presença de 2 (duas) testemunhas.</p>
@@ -2253,7 +2281,7 @@ function printDoc(id) {
 }
 
 // Expor funcoes de Contas e Consignacao para os botoes (script type=module nao cria globais)
-Object.assign(window, { clearForm, deleteConsig, deleteConta, getContaStatus, marcarPaga, openConsigModal, openContaModal, printDoc, renderConsignacoes, renderContas, saveConsig, saveConsigStorage, saveConta, saveContasStorage, setField, updateConsigStatus, updateParcelasInfo, valorExtenso, viewConsig });
+Object.assign(window, { consigComissao, consigValorDono, consigBRL, clearForm, deleteConsig, deleteConta, getContaStatus, marcarPaga, openConsigModal, openContaModal, printDoc, renderConsignacoes, renderContas, saveConsig, saveConsigStorage, saveConta, saveContasStorage, setField, updateConsigStatus, updateParcelasInfo, valorExtenso, viewConsig });
 </script>
 </body>
 </html>
