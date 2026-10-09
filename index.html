@@ -1962,7 +1962,23 @@ function saveConta(){
 function deleteConta(i){ if(confirm('Excluir esta conta?')){ contas.splice(i,1); saveContasStorage(); renderContas(); } }
 
 function marcarPaga(i){
-  if(contas[i].pagas < contas[i].parcelas){ contas[i].pagas++; saveContasStorage(); renderContas(); }
+  const c = contas[i];
+  if(c.pagas < c.parcelas){
+    c.pagas++;
+    // Ainda restam parcelas: avanca o vencimento para o mes seguinte, mantendo o dia original
+    if(c.pagas < c.parcelas && c.vencimento){
+      const p = c.vencimento.split('-').map(Number);
+      if(p.length===3 && p.every(n=>!isNaN(n))){
+        const dia = c.diaVenc || p[2];
+        c.diaVenc = dia;
+        let ano = p[0], mes = p[1] + 1;
+        if(mes > 12){ mes = 1; ano++; }
+        const ultimoDia = new Date(ano, mes, 0).getDate();
+        c.vencimento = ano + '-' + String(mes).padStart(2,'0') + '-' + String(Math.min(dia, ultimoDia)).padStart(2,'0');
+      }
+    }
+    saveContasStorage(); renderContas();
+  }
 }
 
 function renderContas(){
